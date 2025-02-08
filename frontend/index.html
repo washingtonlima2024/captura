@@ -1,0 +1,189 @@
+<!-- Frontend: App.js -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Captura de Foto</title>
+    <style>
+        body, html {
+            margin: 0;
+            padding: 0;
+            height: 100%;
+            width: 100%;
+            overflow: hidden;
+            font-family: Arial, sans-serif;
+            background-color: #000;
+            color: white;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+
+        video {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            z-index: 0;
+        }
+
+        .grid-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: url('icone/grade.png') no-repeat center center;
+            background-size: 100% auto;
+            z-index: 1;
+            pointer-events: none;
+            opacity: 0.5;
+        }
+
+        .controls {
+            position: absolute;
+            z-index: 2;
+            right: 20px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100%;
+        }
+
+        .capture-button {
+            width: 60px;
+            height: 60px;
+            background: url('icone/botao.png') no-repeat center center;
+            background-size: cover;
+            border-radius: 50%;
+            border: none;
+            cursor: pointer;
+            outline: none;
+            box-shadow: 0 0 10px rgba(0, 0, 0, 0.7);
+            display: none;
+        }
+
+        .capture-button:hover {
+            opacity: 0.8;
+        }
+
+        .rotate-icon {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 120px;
+            height: 120px;
+            background: url('icone/virar.png') no-repeat center center;
+            background-size: contain;
+            display: none;
+            z-index: 3;
+        }
+
+        .flash {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(255, 255, 255, 0.8);
+            z-index: 4;
+            display: none;
+            animation: flash-effect 0.3s ease-in-out;
+        }
+
+        @keyframes flash-effect {
+            0% { opacity: 0.8; }
+            100% { opacity: 0; }
+        }
+    </style>
+</head>
+<body>
+    <video id="video" autoplay playsinline muted></video>
+    <div class="grid-overlay"></div>
+    <canvas id="canvas" width="1920" height="1080" style="display: none;"></canvas>
+    <div class="flash" id="flash"></div>
+    <div class="rotate-icon" id="rotate-icon"></div>
+    <div class="controls">
+        <button id="capture-photo" class="capture-button"></button>
+    </div>
+
+    <script>
+        const video = document.getElementById('video');
+        const canvas = document.getElementById('canvas');
+        const capturePhotoButton = document.getElementById('capture-photo');
+        const flash = document.getElementById('flash');
+        const rotateIcon = document.getElementById('rotate-icon');
+
+        function updateOrientation() {
+            if (window.innerHeight > window.innerWidth) {
+                rotateIcon.style.display = 'block';
+                capturePhotoButton.style.display = 'none';
+                if (video.srcObject) {
+                    video.srcObject.getTracks().forEach(track => track.stop());
+                    video.srcObject = null;
+                }
+            } else {
+                rotateIcon.style.display = 'none';
+                capturePhotoButton.style.display = 'block';
+                startCamera();
+            }
+        }
+
+        async function startCamera() {
+            try {
+                const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
+                video.srcObject = stream;
+            } catch (error) {
+                console.error('Erro ao acessar a câmera:', error);
+                alert('Permissão para acessar a câmera foi negada ou ocorreu um erro.');
+            }
+        }
+
+        window.addEventListener('load', () => {
+            updateOrientation();
+            window.addEventListener('resize', updateOrientation);
+        });
+
+        capturePhotoButton.addEventListener('click', async () => {
+        const videoAspectRatio = video.videoWidth / video.videoHeight;
+
+        // Ajuste o tamanho do canvas baseado na proporção da câmera
+        canvas.width = video.videoWidth;
+        canvas.height = video.videoHeight;
+
+        const context = canvas.getContext('2d');
+        context.drawImage(video, 0, 0, canvas.width, canvas.height);
+
+        flash.style.display = 'block';
+        setTimeout(() => { flash.style.display = 'none'; }, 300);
+
+        const dataURL = canvas.toDataURL('image/png');
+        const blob = await fetch(dataURL).then(res => res.blob());
+        const formData = new FormData();
+        formData.append('photo', blob, 'exame.png');
+
+        try {
+            const response = await fetch('http://localhost:5000/api/upload', {
+            method: 'POST',
+            body: formData,
+            });
+
+            if (!response.ok) {
+            throw new Error('Erro ao enviar a foto.');
+            }
+
+        const result = await response.json();
+        alert('Foto enviada com sucesso! Veja aqui: ' + result.filePath);
+    } catch (error) {
+        console.error('Erro ao enviar a foto:', error);
+        alert('Erro ao enviar a foto.');
+    }
+});
+
+    </script>
+</body>
+</html>
